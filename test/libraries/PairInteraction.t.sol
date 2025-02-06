@@ -10,6 +10,7 @@ import "../interfaces/IUV3Pair.sol";
 import "../interfaces/ILegacyLBPair.sol";
 import "../interfaces/ILegacyLBRouter.sol";
 import "../interfaces/ILBPair.sol";
+import "../interfaces/ITMPair.sol";
 
 contract PairInteractionTest is Test {
     error CustomError();
@@ -320,6 +321,88 @@ contract PairInteractionTest is Test {
         this.swapUV3(address(this), tokenIn, zeroForOne, amountIn, recipient);
     }
 
+    function test_Fuzz_GetSwapInTM(uint256 amountOut, bool swapForY, uint256 amountIn, uint256 actualAmountOut)
+        public
+    {
+        amountOut = bound(amountOut, 0, uint256(type(int256).max));
+        amountIn = bound(amountIn, 0, uint256(type(int256).max));
+        actualAmountOut = bound(actualAmountOut, 0, uint256(type(int256).max));
+
+        _case = 1;
+        _data =
+            swapForY ? abi.encode(amountIn, -int256(actualAmountOut)) : abi.encode(-int256(actualAmountOut), amountIn);
+
+        (uint256 amountIn_, uint256 actualAmountOut_) = this.getSwapInTM(address(this), amountOut, swapForY);
+
+        assertEq(amountIn_, amountIn + 1, "test_Fuzz_GetSwapInTM::1");
+        assertEq(actualAmountOut_, actualAmountOut, "test_Fuzz_GetSwapInTM::2");
+    }
+
+    function test_Fuzz_Revert_GetSwapInTM(uint256 amountOut, bool swapForY) public {
+        _case = 1;
+        _data = new bytes(63);
+
+        vm.expectRevert(PairInteraction.PairInteraction__InvalidReturnData.selector);
+        this.getSwapInTM(address(this), amountOut, swapForY);
+
+        _case = 2;
+        _data = abi.encodeWithSelector(CustomError.selector);
+
+        vm.expectRevert(CustomError.selector);
+        this.getSwapInTM(address(this), amountOut, swapForY);
+
+        _data = "Error String";
+
+        vm.expectRevert("Error String");
+        this.getSwapInTM(address(this), amountOut, swapForY);
+    }
+
+    function test_Fuzz_SwapTM(
+        uint256 amountOut,
+        bool swapForY,
+        uint256 amountIn,
+        uint256 actualAmountIn,
+        address recipient
+    ) public {
+        amountOut = bound(amountOut, 0, uint256(type(int256).max));
+        amountIn = bound(amountIn, 0, uint256(type(int256).max));
+        actualAmountIn = bound(actualAmountIn, 0, uint256(type(int256).max));
+
+        _case = 0;
+        _data =
+            swapForY ? abi.encode(actualAmountIn, -int256(amountOut)) : abi.encode(-int256(amountOut), actualAmountIn);
+
+        (uint256 amountOut_, uint256 actualAmountIn_) = this.swapTM(address(this), recipient, amountIn, swapForY);
+
+        assertEq(amountOut_, amountOut, "test_Fuzz_SwapTM::1");
+        assertEq(actualAmountIn_, actualAmountIn, "test_Fuzz_SwapTM::2");
+
+        assertEq(
+            _msgData,
+            abi.encodeWithSelector(ITMPair.swap.selector, recipient, amountIn, swapForY, "", address(0)),
+            "test_Fuzz_SwapTM::3"
+        );
+    }
+
+    function test_Fuzz_Revert_SwapTM(uint256 amountOut, bool swapForY, address recipient) public {
+        _case = 1;
+        _data = new bytes(63);
+
+        vm.expectRevert(PairInteraction.PairInteraction__InvalidReturnData.selector);
+        this.swapTM(address(this), recipient, amountOut, swapForY);
+
+        _case = 2;
+        _data = abi.encodeWithSelector(CustomError.selector);
+
+        vm.expectRevert(CustomError.selector);
+        this.swapTM(address(this), recipient, amountOut, swapForY);
+
+        _data = "Error String";
+
+        vm.expectRevert("Error String");
+        this.swapTM(address(this), recipient, amountOut, swapForY);
+    }
+
     // Helper functions
 
     function getReservesUV2(address pair, bool ordered) external view returns (uint256, uint256) {
@@ -359,5 +442,16 @@ contract PairInteractionTest is Test {
         returns (uint256 amountOut, uint256 actualAmountIn, uint256 hash)
     {
         return PairInteraction.swapUV3(pair, recipient, zeroForOne, amountIn, tokenIn);
+    }
+
+    function getSwapInTM(address pair, uint256 amountOut, bool zeroForOne) external view returns (uint256, uint256) {
+        return PairInteraction.getSwapInTM(pair, amountOut, zeroForOne);
+    }
+
+    function swapTM(address pair, address recipient, uint256 amountIn, bool swapForY)
+        external
+        returns (uint256, uint256)
+    {
+        return PairInteraction.swapTM(pair, recipient, amountIn, swapForY);
     }
 }

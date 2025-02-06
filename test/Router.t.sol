@@ -54,6 +54,8 @@ contract RouterTest is Test {
     }
 
     function test_Fuzz_UpdateLogic(address logic) public {
+        vm.assume(logic != address(routerLogic));
+
         assertEq(router.getTrustedLogicLength(), 1, "test_Fuzz_UpdateLogic::1");
         assertEq(router.getTrustedLogicAt(0), address(routerLogic), "test_Fuzz_UpdateLogic::2");
 
@@ -575,6 +577,11 @@ contract RouterTest is Test {
         router.swapExactOut(
             address(routerLogic), address(token0), address(token1), amountOut, amountInMax, bob, block.timestamp, route
         );
+    }
+
+    function test_Revert_Router() public {
+        vm.expectRevert(IRouter.Router__OnlyWnative.selector);
+        payable(address(router)).transfer(1);
     }
 }
 

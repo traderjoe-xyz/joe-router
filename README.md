@@ -1,6 +1,6 @@
 # [Joe Router Contract](https://github.com/traderjoe-xyz/joe-router)
 
-This repository contains the implementation of a Router contract for swapping tokens using predefined routes. The routes must follow the PackedRoute format. The Router contract interacts with various decentralized exchanges (DEXs) such as Uniswap V2, Uniswap V3, and Trader Joe.
+This repository contains the implementation of a Router contract for swapping tokens using predefined routes. The routes must follow the PackedRoute format. The Router contract interacts with various decentralized exchanges (DEXs) such as Uniswap V2, Uniswap V3, and LFJ (formerly Trader Joe).
 
 ## Contracts
 
@@ -14,7 +14,7 @@ The RouterLogic contract implements the logic for swapping tokens using a route.
 
 ### RouterAdapter.sol
 
-The RouterAdapter contract provides helper functions for interacting with different types of pairs, including Uniswap V2, Trader Joe Legacy LB, Trader Joe LB, and Uniswap V3 pairs.
+The RouterAdapter contract provides helper functions for interacting with different types of pairs, including Uniswap V2, LFJ Legacy Liquidity Book, LFJ Liquidity Book, Uniswap V3 pairs, and LFJ Token Mill pairs.
 
 ## Libraries
 
@@ -28,7 +28,7 @@ Helper library for router operations, such as validateAndTransfer, transfer, and
 
 ### PairInteraction.sol
 
-Helper library for interacting with Uniswap V2, Trader Joe, and Uniswap V3 pairs.
+Helper library for interacting with Uniswap V2, LFJ (formerly Trader Joe), and Uniswap V3 pairs.
 
 ### PackedRoute.sol
 

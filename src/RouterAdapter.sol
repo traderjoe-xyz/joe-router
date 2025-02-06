@@ -8,11 +8,12 @@ import {TokenLib} from "./libraries/TokenLib.sol";
 /**
  * @title RouterAdapter
  * @notice Router adapter contract for interacting with different types of pairs.
- * Currently supports Uniswap V2, Trader Joe Legacy LB, Trader Joe LB, and Uniswap V3 pairs.
+ * Currently supports Uniswap V2, LFJ Legacy LB, LFJ LB, Uniswap V3 pairs and LFJ Token Mill.
  */
 abstract contract RouterAdapter {
     error RouterAdapter__InvalidId();
     error RouterAdapter__InsufficientLBLiquidity();
+    error RouterAdapter__InsufficientTMLiquidity();
     error RouterAdapter__UniswapV3SwapCallbackOnly(int256 amount0Delta, int256 amount1Delta);
     error RouterAdapter__UnexpectedCallback();
     error RouterAdapter__UnexpectedAmountIn();
@@ -39,12 +40,14 @@ abstract contract RouterAdapter {
 
         if (id == Flags.UNISWAP_V2_ID) {
             return _getAmountInUV2(pair, flags, amountOut);
-        } else if (id == Flags.TRADERJOE_LEGACY_LB_ID) {
+        } else if (id == Flags.LFJ_LEGACY_LIQUIDITY_BOOK_ID) {
             return _getAmountInLegacyLB(pair, flags, amountOut);
-        } else if (id == Flags.TRADERJOE_LB_ID) {
+        } else if (id == Flags.LFJ_LIQUIDITY_BOOK_ID) {
             return _getAmountInLB(pair, flags, amountOut);
         } else if (id == Flags.UNISWAP_V3_ID) {
             return _getAmountInUV3(pair, flags, amountOut);
+        } else if (id == Flags.LFJ_TOKEN_MILL_ID) {
+            return _getAmountInTM(pair, flags, amountOut);
         } else {
             revert RouterAdapter__InvalidId();
         }
@@ -64,12 +67,14 @@ abstract contract RouterAdapter {
 
         if (id == Flags.UNISWAP_V2_ID) {
             amountOut = _swapUV2(pair, flags, amountIn, recipient);
-        } else if (id == Flags.TRADERJOE_LEGACY_LB_ID) {
+        } else if (id == Flags.LFJ_LEGACY_LIQUIDITY_BOOK_ID) {
             amountOut = _swapLegacyLB(pair, flags, recipient);
-        } else if (id == Flags.TRADERJOE_LB_ID) {
+        } else if (id == Flags.LFJ_LIQUIDITY_BOOK_ID) {
             amountOut = _swapLB(pair, flags, recipient);
         } else if (id == Flags.UNISWAP_V3_ID) {
             amountOut = _swapUV3(pair, flags, recipient, amountIn, tokenIn);
+        } else if (id == Flags.LFJ_TOKEN_MILL_ID) {
+            amountOut = _swapTM(pair, flags, recipient, amountIn);
         } else {
             revert RouterAdapter__InvalidId();
         }
@@ -105,7 +110,7 @@ abstract contract RouterAdapter {
     /* Legacy LB v2.0 */
 
     /**
-     * @dev Returns the amount of tokenIn needed to get amountOut from the Trader Joe Legacy LB pair.
+     * @dev Returns the amount of tokenIn needed to get amountOut from the LFJ Legacy LB pair.
      */
     function _getAmountInLegacyLB(address pair, uint256 flags, uint256 amountOut)
         internal
@@ -116,7 +121,7 @@ abstract contract RouterAdapter {
     }
 
     /**
-     * @dev Swaps tokens from the sender to the recipient using the Trader Joe Legacy LB pair.
+     * @dev Swaps tokens from the sender to the recipient using the LFJ Legacy LB pair.
      */
     function _swapLegacyLB(address pair, uint256 flags, address recipient) internal returns (uint256 amountOut) {
         return PairInteraction.swapLegacyLB(pair, Flags.zeroForOne(flags), recipient);
@@ -125,7 +130,7 @@ abstract contract RouterAdapter {
     /* LB v2.1 and v2.2 */
 
     /**
-     * @dev Returns the amount of tokenIn needed to get amountOut from the Trader Joe LB pair.
+     * @dev Returns the amount of tokenIn needed to get amountOut from the LFJ LB pair.
      */
     function _getAmountInLB(address pair, uint256 flags, uint256 amountOut) internal view returns (uint256) {
         (uint256 amountIn, uint256 amountLeft) = PairInteraction.getSwapInLB(pair, amountOut, Flags.zeroForOne(flags));
@@ -134,7 +139,7 @@ abstract contract RouterAdapter {
     }
 
     /**
-     * @dev Swaps tokens from the sender to the recipient using the Trader Joe LB pair.
+     * @dev Swaps tokens from the sender to the recipient using the LFJ LB pair.
      */
     function _swapLB(address pair, uint256 flags, address recipient) internal returns (uint256 amountOut) {
         return PairInteraction.swapLB(pair, Flags.zeroForOne(flags), recipient);
@@ -185,5 +190,28 @@ abstract contract RouterAdapter {
         _callbackData = PairInteraction.hashUV3(amount0Delta, amount1Delta, token);
 
         TokenLib.transfer(token, msg.sender, uint256(amount0Delta > 0 ? amount0Delta : amount1Delta));
+    }
+
+    /* Token Mill */
+
+    /**
+     * @dev Returns the amount of tokenIn needed to get amountOut from the LFJ Token Mill pair.
+     */
+    function _getAmountInTM(address pair, uint256 flags, uint256 amountOut) internal view returns (uint256) {
+        (uint256 amountIn, uint256 actualAmountOut) =
+            PairInteraction.getSwapInTM(pair, amountOut, Flags.zeroForOne(flags));
+        if (actualAmountOut != amountOut) revert RouterAdapter__InsufficientTMLiquidity();
+        return amountIn;
+    }
+
+    /**
+     * @dev Swaps tokens from the sender to the recipient using the LFJ Token Mill pair.
+     */
+    function _swapTM(address pair, uint256 flags, address recipient, uint256 amountIn) internal returns (uint256) {
+        (uint256 amountOut, uint256 actualAmountIn) =
+            PairInteraction.swapTM(pair, recipient, amountIn, Flags.zeroForOne(flags));
+
+        if (actualAmountIn != amountIn) revert RouterAdapter__InsufficientTMLiquidity();
+        return amountOut;
     }
 }

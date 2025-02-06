@@ -9,9 +9,10 @@ abstract contract PackedRouteHelper {
     uint16 public ZERO_FOR_ONE = uint16(Flags.ZERO_FOR_ONE);
     uint16 public CALLBACK = uint16(Flags.CALLBACK);
     uint16 public TJ1_ID = uint16(Flags.UNISWAP_V2_ID);
-    uint16 public LB0_ID = uint16(Flags.TRADERJOE_LEGACY_LB_ID);
-    uint16 public LB12_ID = uint16(Flags.TRADERJOE_LB_ID);
+    uint16 public LB0_ID = uint16(Flags.LFJ_LEGACY_LIQUIDITY_BOOK_ID);
+    uint16 public LB12_ID = uint16(Flags.LFJ_LIQUIDITY_BOOK_ID);
     uint16 public UV3_ID = uint16(Flags.UNISWAP_V3_ID);
+    uint16 public TM_ID = uint16(Flags.LFJ_TOKEN_MILL_ID);
 
     mapping(address => uint256) public _tokenToId;
 

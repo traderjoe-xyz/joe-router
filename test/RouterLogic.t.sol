@@ -26,6 +26,7 @@ contract RouterLogicTest is Test, PackedRouteHelper {
     address bob = makeAddr("bob");
 
     bytes public revertData;
+    bytes public returnData;
 
     function getSwapIn(address pair, uint256 amountOut, bool swapForY) external view returns (uint256, uint256) {
         (uint256 amountIn, uint256 amountLeft,) = MockLBPair(pair).getSwapIn(uint128(amountOut), swapForY);
@@ -44,26 +45,22 @@ contract RouterLogicTest is Test, PackedRouteHelper {
             }
         }
 
-        uint256 cdatasize;
+        address token;
+        address to;
+        uint256 amount;
 
         assembly ("memory-safe") {
-            cdatasize := calldatasize()
-        }
-
-        if (cdatasize == 96) {
-            address token;
-            address to;
-            uint256 amount;
-
-            assembly ("memory-safe") {
+            if and(eq(calldatasize(), 96), iszero(shr(224, calldataload(0)))) {
                 token := shr(96, calldataload(4))
                 to := shr(96, calldataload(44))
                 amount := calldataload(64)
             }
+        }
 
+        if (token != address(0)) {
             MockERC20(token).transfer(to, amount);
         } else {
-            data = abi.encode(1e18, 1e18);
+            data = returnData;
 
             assembly ("memory-safe") {
                 return(add(data, 32), mload(data))
@@ -296,7 +293,7 @@ contract RouterLogicTest is Test, PackedRouteHelper {
     }
 
     function test_Fuzz_Revert_InvalidId(uint16 id) public {
-        uint16 invalidId = id == 0 ? id : uint16(bound(id, (UV3_ID >> 8) + 1, type(uint8).max) << 8);
+        uint16 invalidId = id == 0 ? id : uint16(bound(id, (TM_ID >> 8) + 1, type(uint8).max) << 8);
 
         (bytes memory route, uint256 ptr) = _createRoutes(2, 1);
 
@@ -337,8 +334,41 @@ contract RouterLogicTest is Test, PackedRouteHelper {
 
         _setRoute(route, ptr, address(token0), address(token1), address(this), 1e4, ZERO_FOR_ONE | UV3_ID);
 
+        returnData = abi.encode(1e18, 1e18);
+
         vm.expectRevert(abi.encode(1e18, 1e18));
         routerLogic.swapExactOut(address(token0), address(token1), 1e18, 1e18, alice, bob, route);
+
+        revertData = new bytes(1);
+
+        vm.expectRevert(revertData);
+        routerLogic.swapExactOut(address(token0), address(token1), 1e18, 1e18, alice, bob, route);
+
+        revertData = abi.encodeWithSelector(bytes4(0x12345678), int256(0), int256(0));
+
+        vm.expectRevert(revertData);
+        routerLogic.swapExactOut(address(token0), address(token1), 1e18, 1e18, alice, bob, route);
+    }
+
+    function test_Revert_TokenMill() public {
+        (bytes memory route, uint256 ptr) = _createRoutes(2, 1);
+
+        ptr = _setIsTransferTaxToken(route, ptr, false);
+        ptr = _setToken(route, ptr, address(token0));
+        ptr = _setToken(route, ptr, address(token1));
+
+        _setRoute(route, ptr, address(token0), address(token1), address(this), 1e4, ZERO_FOR_ONE | TM_ID);
+
+        returnData = abi.encode(-(1e18 - 1), 1e18);
+
+        vm.expectRevert(RouterAdapter.RouterAdapter__InsufficientTMLiquidity.selector);
+        routerLogic.swapExactOut(address(token0), address(token1), 1e18, 1e18, alice, bob, route);
+
+        MockERC20(token0).mint(address(this), 1e18);
+        MockERC20(token0).mint(address(this), 1e18);
+
+        vm.expectRevert(RouterAdapter.RouterAdapter__InsufficientTMLiquidity.selector);
+        routerLogic.swapExactIn(address(token0), address(token1), 1e18, 1e18, alice, bob, route);
 
         revertData = new bytes(1);
 
