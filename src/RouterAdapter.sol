@@ -14,6 +14,7 @@ abstract contract RouterAdapter {
     error RouterAdapter__InvalidId();
     error RouterAdapter__InsufficientLBLiquidity();
     error RouterAdapter__InsufficientTMLiquidity();
+    error RouterAdapter__InsufficientTMV2Liquidity();
     error RouterAdapter__UniswapV3SwapCallbackOnly(int256 amount0Delta, int256 amount1Delta);
     error RouterAdapter__UnexpectedCallback();
     error RouterAdapter__UnexpectedAmountIn();
@@ -48,6 +49,8 @@ abstract contract RouterAdapter {
             return _getAmountInUV3(pair, flags, amountOut);
         } else if (id == Flags.LFJ_TOKEN_MILL_ID) {
             return _getAmountInTM(pair, flags, amountOut);
+        } else if (id == Flags.LFJ_TOKEN_MILL_V2_ID) {
+            return _getAmountInTMV2(pair, flags, amountOut);
         } else {
             revert RouterAdapter__InvalidId();
         }
@@ -75,6 +78,8 @@ abstract contract RouterAdapter {
             amountOut = _swapUV3(pair, flags, recipient, amountIn, tokenIn);
         } else if (id == Flags.LFJ_TOKEN_MILL_ID) {
             amountOut = _swapTM(pair, flags, recipient, amountIn);
+        } else if (id == Flags.LFJ_TOKEN_MILL_V2_ID) {
+            amountOut = _swapTMV2(pair, flags, recipient, amountIn);
         } else {
             revert RouterAdapter__InvalidId();
         }
@@ -212,6 +217,29 @@ abstract contract RouterAdapter {
             PairInteraction.swapTM(pair, recipient, amountIn, Flags.zeroForOne(flags));
 
         if (actualAmountIn != amountIn) revert RouterAdapter__InsufficientTMLiquidity();
+        return amountOut;
+    }
+
+    /* Token Mill V2 */
+
+    /**
+     * @dev Returns the amount of tokenIn needed to get amountOut from the LFJ Token Mill V2 pair.
+     */
+    function _getAmountInTMV2(address pair, uint256 flags, uint256 amountOut) internal view returns (uint256) {
+        (uint256 amountIn, uint256 actualAmountOut) =
+            PairInteraction.getSwapInTMV2(pair, amountOut, Flags.zeroForOne(flags));
+        if (actualAmountOut != amountOut) revert RouterAdapter__InsufficientTMV2Liquidity();
+        return amountIn;
+    }
+
+    /**
+     * @dev Swaps tokens from the sender to the recipient using the LFJ Token Mill V2 pair.
+     */
+    function _swapTMV2(address pair, uint256 flags, address recipient, uint256 amountIn) internal returns (uint256) {
+        (uint256 amountOut, uint256 actualAmountIn) =
+            PairInteraction.swapTMV2(pair, recipient, amountIn, Flags.zeroForOne(flags));
+
+        if (actualAmountIn != amountIn) revert RouterAdapter__InsufficientTMV2Liquidity();
         return amountOut;
     }
 }

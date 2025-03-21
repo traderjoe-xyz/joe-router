@@ -11,6 +11,7 @@ import "../interfaces/ILegacyLBPair.sol";
 import "../interfaces/ILegacyLBRouter.sol";
 import "../interfaces/ILBPair.sol";
 import "../interfaces/ITMPair.sol";
+import "../interfaces/ITMPairV2.sol";
 
 contract PairInteractionTest is Test {
     error CustomError();
@@ -41,6 +42,28 @@ contract PairInteractionTest is Test {
 
             assembly ("memory-safe") {
                 revert(add(data, 0x20), mload(data))
+            }
+        }
+
+        if (c == 3 || c == 4) {
+            (bytes memory b0, bytes memory b1) = abi.decode(_data, (bytes, bytes));
+
+            if (msg.sig == ITMPairV2.getSqrtRatiosBounds.selector) {
+                assembly ("memory-safe") {
+                    return(add(b0, 0x20), mload(b0))
+                }
+            } else {
+                if (b1.length == 0) {
+                    revert CustomError();
+                } else if (b1.length == 1) {
+                    revert("Error String");
+                }
+
+                if (c == 4) _msgData = msg.data;
+
+                assembly ("memory-safe") {
+                    return(add(b1, 0x20), mload(b1))
+                }
             }
         }
     }
@@ -321,21 +344,22 @@ contract PairInteractionTest is Test {
         this.swapUV3(address(this), tokenIn, zeroForOne, amountIn, recipient);
     }
 
-    function test_Fuzz_GetSwapInTM(uint256 amountOut, bool swapForY, uint256 amountIn, uint256 actualAmountOut)
+    function test_Fuzz_GetSwapInTM(uint256 amountOut, bool swapForY, uint256 actualAmountIn, uint256 actualAmountOut)
         public
     {
         amountOut = bound(amountOut, 0, uint256(type(int256).max));
-        amountIn = bound(amountIn, 0, uint256(type(int256).max));
+        actualAmountIn = bound(actualAmountIn, 0, uint256(type(int256).max));
         actualAmountOut = bound(actualAmountOut, 0, uint256(type(int256).max));
 
         _case = 1;
-        _data =
-            swapForY ? abi.encode(amountIn, -int256(actualAmountOut)) : abi.encode(-int256(actualAmountOut), amountIn);
+        _data = swapForY
+            ? abi.encode(actualAmountIn, -int256(actualAmountOut))
+            : abi.encode(-int256(actualAmountOut), actualAmountIn);
 
-        (uint256 amountIn_, uint256 actualAmountOut_) = this.getSwapInTM(address(this), amountOut, swapForY);
+        (uint256 amountIn_, uint256 amountOut_) = this.getSwapInTM(address(this), amountOut, swapForY);
 
-        assertEq(amountIn_, amountIn + 1, "test_Fuzz_GetSwapInTM::1");
-        assertEq(actualAmountOut_, actualAmountOut, "test_Fuzz_GetSwapInTM::2");
+        assertEq(amountIn_, actualAmountIn + 1, "test_Fuzz_GetSwapInTM::1");
+        assertEq(amountOut_, actualAmountOut, "test_Fuzz_GetSwapInTM::2");
     }
 
     function test_Fuzz_Revert_GetSwapInTM(uint256 amountOut, bool swapForY) public {
@@ -358,23 +382,24 @@ contract PairInteractionTest is Test {
     }
 
     function test_Fuzz_SwapTM(
-        uint256 amountOut,
-        bool swapForY,
         uint256 amountIn,
+        bool swapForY,
         uint256 actualAmountIn,
+        uint256 actualAmountOut,
         address recipient
     ) public {
-        amountOut = bound(amountOut, 0, uint256(type(int256).max));
         amountIn = bound(amountIn, 0, uint256(type(int256).max));
         actualAmountIn = bound(actualAmountIn, 0, uint256(type(int256).max));
+        actualAmountOut = bound(actualAmountOut, 0, uint256(type(int256).max));
 
         _case = 0;
-        _data =
-            swapForY ? abi.encode(actualAmountIn, -int256(amountOut)) : abi.encode(-int256(amountOut), actualAmountIn);
+        _data = swapForY
+            ? abi.encode(actualAmountIn, -int256(actualAmountOut))
+            : abi.encode(-int256(actualAmountOut), actualAmountIn);
 
         (uint256 amountOut_, uint256 actualAmountIn_) = this.swapTM(address(this), recipient, amountIn, swapForY);
 
-        assertEq(amountOut_, amountOut, "test_Fuzz_SwapTM::1");
+        assertEq(amountOut_, actualAmountOut, "test_Fuzz_SwapTM::1");
         assertEq(actualAmountIn_, actualAmountIn, "test_Fuzz_SwapTM::2");
 
         assertEq(
@@ -401,6 +426,138 @@ contract PairInteractionTest is Test {
 
         vm.expectRevert("Error String");
         this.swapTM(address(this), recipient, amountOut, swapForY);
+    }
+
+    function test_Fuzz_GetSqrtLimitPriceInTMV2(bool swapForY, uint256 sqrtPrice) public {
+        sqrtPrice = bound(sqrtPrice, 1, type(uint256).max);
+        _case = 1;
+        _data = swapForY ? abi.encode(sqrtPrice, 0, 0) : abi.encode(0, 0, sqrtPrice);
+
+        uint256 price = this.getSqrtLimitPriceInTMV2(address(this), swapForY);
+
+        assertEq(price, sqrtPrice, "test_Fuzz_GetSqrtLimitPriceInTMV2::1");
+    }
+
+    function test_Fuzz_Revert_GetSqrtLimitPriceInTMV2(bool swapForY) public {
+        _case = 1;
+        _data = new bytes(95);
+
+        vm.expectRevert(PairInteraction.PairInteraction__InvalidReturnData.selector);
+        this.getSqrtLimitPriceInTMV2(address(this), swapForY);
+
+        _case = 2;
+        _data = abi.encodeWithSelector(CustomError.selector);
+
+        vm.expectRevert(PairInteraction.PairInteraction__InvalidReturnData.selector);
+        this.getSqrtLimitPriceInTMV2(address(this), swapForY);
+
+        _data = "Error String";
+
+        vm.expectRevert(PairInteraction.PairInteraction__InvalidReturnData.selector);
+        this.getSqrtLimitPriceInTMV2(address(this), swapForY);
+    }
+
+    function test_Fuzz_GetSwapInTMV2(
+        uint256 amountOut,
+        bool swapForY,
+        uint256 sqrtLimitPrice,
+        uint256 actualAmountIn,
+        uint256 actualAmountOut
+    ) public {
+        sqrtLimitPrice = bound(sqrtLimitPrice, 1, type(uint256).max);
+        amountOut = bound(amountOut, 0, uint256(type(int256).max));
+        actualAmountIn = bound(actualAmountIn, 0, uint256(type(int256).max));
+        actualAmountOut = bound(actualAmountOut, 0, uint256(type(int256).max));
+
+        _case = 3;
+
+        bytes memory priceData = swapForY ? abi.encode(sqrtLimitPrice, 0, 0) : abi.encode(0, 0, sqrtLimitPrice);
+        bytes memory swapData = swapForY
+            ? abi.encode(actualAmountIn, -int256(actualAmountOut))
+            : abi.encode(-int256(actualAmountOut), actualAmountIn);
+        _data = abi.encode(priceData, swapData);
+
+        (uint256 amountIn_, uint256 amountOut_) = this.getSwapInTMV2(address(this), amountOut, swapForY);
+
+        assertEq(amountIn_, actualAmountIn, "test_Fuzz_GetSwapInTMV2::1");
+        assertEq(amountOut_, actualAmountOut, "test_Fuzz_GetSwapInTMV2::2");
+    }
+
+    function test_Fuzz_Revert_GetSwapInTMV2(uint256 amountOut, bool swapForY) public {
+        _case = 3;
+        _data = abi.encode(new bytes(95), new bytes(64));
+
+        vm.expectRevert(PairInteraction.PairInteraction__InvalidReturnData.selector);
+        this.getSwapInTMV2(address(this), amountOut, swapForY);
+
+        _data = abi.encode(new bytes(96), new bytes(63));
+
+        vm.expectRevert(PairInteraction.PairInteraction__InvalidReturnData.selector);
+        this.getSwapInTMV2(address(this), amountOut, swapForY);
+
+        _data = abi.encode(new bytes(96), new bytes(0));
+
+        vm.expectRevert(CustomError.selector);
+        this.getSwapInTMV2(address(this), amountOut, swapForY);
+
+        _data = abi.encode(new bytes(96), new bytes(1));
+
+        vm.expectRevert("Error String");
+        this.getSwapInTMV2(address(this), amountOut, swapForY);
+    }
+
+    function test_Fuzz_SwapTMV2(
+        uint256 amountIn,
+        bool swapForY,
+        uint256 sqrtLimitPrice,
+        uint256 actualAmountIn,
+        uint256 actualAmountOut,
+        address recipient
+    ) public {
+        amountIn = bound(amountIn, 0, uint256(type(int256).max));
+        actualAmountIn = bound(actualAmountIn, 0, uint256(type(int256).max));
+        actualAmountOut = bound(actualAmountOut, 0, uint256(type(int256).max));
+
+        _case = 4;
+        bytes memory priceData = swapForY ? abi.encode(sqrtLimitPrice, 0, 0) : abi.encode(0, 0, sqrtLimitPrice);
+        bytes memory swapData = swapForY
+            ? abi.encode(actualAmountIn, -int256(actualAmountOut))
+            : abi.encode(-int256(actualAmountOut), actualAmountIn);
+        _data = abi.encode(priceData, swapData);
+
+        (uint256 amountOut_, uint256 actualAmountIn_) = this.swapTMV2(address(this), recipient, amountIn, swapForY);
+
+        assertEq(amountOut_, actualAmountOut, "test_Fuzz_SwapTMV2::1");
+        assertEq(actualAmountIn_, actualAmountIn, "test_Fuzz_SwapTMV2::2");
+
+        assertEq(
+            _msgData,
+            abi.encodeWithSelector(ITMPairV2.swap.selector, recipient, swapForY, amountIn, sqrtLimitPrice),
+            "test_Fuzz_SwapTMV2::3"
+        );
+    }
+
+    function test_Fuzz_Revert_SwapTMV2(uint256 amountOut, bool swapForY, address recipient) public {
+        _case = 3;
+        _data = abi.encode(new bytes(95), new bytes(64));
+
+        vm.expectRevert(PairInteraction.PairInteraction__InvalidReturnData.selector);
+        this.swapTMV2(address(this), recipient, amountOut, swapForY);
+
+        _data = abi.encode(new bytes(96), new bytes(63));
+
+        vm.expectRevert(PairInteraction.PairInteraction__InvalidReturnData.selector);
+        this.swapTMV2(address(this), recipient, amountOut, swapForY);
+
+        _data = abi.encode(new bytes(96), new bytes(0));
+
+        vm.expectRevert(CustomError.selector);
+        this.swapTMV2(address(this), recipient, amountOut, swapForY);
+
+        _data = abi.encode(new bytes(96), new bytes(1));
+
+        vm.expectRevert("Error String");
+        this.swapTMV2(address(this), recipient, amountOut, swapForY);
     }
 
     // Helper functions
@@ -453,5 +610,20 @@ contract PairInteractionTest is Test {
         returns (uint256, uint256)
     {
         return PairInteraction.swapTM(pair, recipient, amountIn, swapForY);
+    }
+
+    function getSqrtLimitPriceInTMV2(address pair, bool swapForY) external view returns (uint256) {
+        return PairInteraction.getSqrtLimitPriceInTMV2(pair, swapForY);
+    }
+
+    function getSwapInTMV2(address pair, uint256 amountOut, bool swapForY) external view returns (uint256, uint256) {
+        return PairInteraction.getSwapInTMV2(pair, amountOut, swapForY);
+    }
+
+    function swapTMV2(address pair, address recipient, uint256 amountIn, bool swapForY)
+        external
+        returns (uint256, uint256)
+    {
+        return PairInteraction.swapTMV2(pair, recipient, amountIn, swapForY);
     }
 }

@@ -407,7 +407,132 @@ library PairInteraction {
             mstore(add(ptr, 160), 0)
             mstore(add(ptr, 192), 0)
 
+            mstore(0x40, add(ptr, 160)) // update free memory pointer to 160 because 160:224 is 0
+
             if iszero(call(gas(), pair, 0, add(ptr, 28), 196, 0, 64)) {
+                returndatacopy(0, 0, returndatasize())
+                revert(0, returndatasize())
+            }
+
+            returnDataSize := returndatasize()
+
+            switch swapForY
+            case 0 {
+                actualAmountIn := mload(32)
+                amountOut := mload(0)
+            }
+            default {
+                actualAmountIn := mload(0)
+                amountOut := mload(32)
+            }
+
+            amountOut := sub(0, amountOut) // Invert the sign
+        }
+
+        if (returnDataSize < 64) revert PairInteraction__InvalidReturnData();
+    }
+
+    /**
+     * @dev Returns the limit price bounds of a LFJ Token Mill V2 pair depending on the swap direction.
+     *
+     * Requirements:
+     * - The call must succeed.
+     * - The pair must have code.
+     * - The return data must be at least 96 bytes.
+     */
+    function getSqrtLimitPriceInTMV2(address pair, bool swapForY) internal view returns (uint256 sqrtLimitPriceX96) {
+        uint256 returnDataSize;
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+
+            mstore(ptr, 0xa0b6ea01) // getSqrtRatiosBounds()
+
+            if staticcall(gas(), pair, add(ptr, 28), 4, ptr, 96) { returnDataSize := returndatasize() }
+
+            switch swapForY
+            case 0 { sqrtLimitPriceX96 := mload(add(ptr, 64)) }
+            default { sqrtLimitPriceX96 := mload(ptr) }
+        }
+
+        if (returnDataSize < 96) revert PairInteraction__InvalidReturnData();
+    }
+
+    /**
+     * @dev Returns the amount of tokenIn required to get amountOut from a LFJ Token Mill V2 pair.
+     *
+     * Requirements:
+     * - The call must succeed.
+     * - The pair must have code.
+     * - The return data must be at least 64 bytes.
+     */
+    function getSwapInTMV2(address pair, uint256 amountOut, bool swapForY)
+        internal
+        view
+        returns (uint256 amountIn, uint256 actualAmountOut)
+    {
+        uint256 sqrtLimitPriceX96 = getSqrtLimitPriceInTMV2(pair, swapForY);
+
+        uint256 returnDataSize;
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+
+            mstore(ptr, 0x3419341c) // getDeltaAmounts(bool,int256,uint256)
+            mstore(add(ptr, 32), swapForY)
+            mstore(add(ptr, 64), sub(0, amountOut))
+            mstore(add(ptr, 96), sqrtLimitPriceX96)
+
+            mstore(0x40, add(ptr, 128))
+
+            if iszero(staticcall(gas(), pair, add(ptr, 28), 100, 0, 64)) {
+                returndatacopy(0, 0, returndatasize())
+                revert(0, returndatasize())
+            }
+
+            returnDataSize := returndatasize()
+
+            switch swapForY
+            case 0 {
+                amountIn := mload(32)
+                actualAmountOut := mload(0)
+            }
+            default {
+                amountIn := mload(0)
+                actualAmountOut := mload(32)
+            }
+
+            actualAmountOut := sub(0, actualAmountOut) // Invert the sign
+        }
+
+        if (returnDataSize < 64) revert PairInteraction__InvalidReturnData();
+    }
+
+    /**
+     * @dev Swaps tokenIn for tokenOut in a LFJ Token Mill V2 pair.
+     *
+     * Requirements:
+     * - The call must succeed.
+     * - The pair must have code.
+     * - The return data must be at least 64 bytes.
+     */
+    function swapTMV2(address pair, address recipient, uint256 amountIn, bool swapForY)
+        internal
+        returns (uint256 amountOut, uint256 actualAmountIn)
+    {
+        uint256 sqrtLimitPriceX96 = getSqrtLimitPriceInTMV2(pair, swapForY);
+
+        uint256 returnDataSize;
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+
+            mstore(ptr, 0xabb1db2a) // swap(address,bool,int256,uint256)
+            mstore(add(ptr, 32), recipient)
+            mstore(add(ptr, 64), swapForY)
+            mstore(add(ptr, 96), amountIn)
+            mstore(add(ptr, 128), sqrtLimitPriceX96)
+
+            mstore(0x40, add(ptr, 160))
+
+            if iszero(call(gas(), pair, 0, add(ptr, 28), 132, 0, 64)) {
                 returndatacopy(0, 0, returndatasize())
                 revert(0, returndatasize())
             }

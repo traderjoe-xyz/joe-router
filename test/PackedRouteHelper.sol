@@ -13,6 +13,7 @@ abstract contract PackedRouteHelper {
     uint16 public LB12_ID = uint16(Flags.LFJ_LIQUIDITY_BOOK_ID);
     uint16 public UV3_ID = uint16(Flags.UNISWAP_V3_ID);
     uint16 public TM_ID = uint16(Flags.LFJ_TOKEN_MILL_ID);
+    uint16 public TMV2_ID = uint16(Flags.LFJ_TOKEN_MILL_V2_ID);
 
     mapping(address => uint256) public _tokenToId;
 

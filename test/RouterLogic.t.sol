@@ -293,7 +293,7 @@ contract RouterLogicTest is Test, PackedRouteHelper {
     }
 
     function test_Fuzz_Revert_InvalidId(uint16 id) public {
-        uint16 invalidId = id == 0 ? id : uint16(bound(id, (TM_ID >> 8) + 1, type(uint8).max) << 8);
+        uint16 invalidId = id == 0 ? id : uint16(bound(id, (TMV2_ID >> 8) + 1, type(uint8).max) << 8);
 
         (bytes memory route, uint256 ptr) = _createRoutes(2, 1);
 
